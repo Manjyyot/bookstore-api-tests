@@ -4,7 +4,10 @@
   "scripts": {
   "reset-db": "powershell -Command \"if (Test-Path '../bookstore/test.db') { Remove-Item '../bookstore/test.db' }\"",
   "test": "npx playwright test",
-  "clean-test": "npm run reset-db && npm run test"
+  "clean-test": "npm run reset-db && npm run test",
+  "report": "npx playwright show-report",
+  "test:headed": "npx playwright test --headed",
+  "test:debug": "npx playwright test --debug"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.1",

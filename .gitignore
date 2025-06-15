@@ -1,16 +1,19 @@
-# Python
-__pycache__/
-*.py[cod]
-*.env
-*.sqlite3
-venv/
-bookstore/venv/
-
-# Node/Playwright
-node_modules/
+# Ignore test and coverage outputs
 playwright-report/
 test-results/
-report.json
-
-# OS
+.env
 .DS_Store
+
+# Ignore Python build artifacts
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.db
+*.log
+*.pid
+*.bak
+
+# Ignore virtual environments
+venv/
+.env/
+.envrc

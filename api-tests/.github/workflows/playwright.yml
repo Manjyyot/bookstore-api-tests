@@ -1,4 +1,4 @@
-name: API Tests
+name: API Tests (Playwright + Docker)
 
 on:
   push:
@@ -6,52 +6,56 @@ on:
   pull_request:
 
 jobs:
-  test:
+  api-tests:
+    name: Run API Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     services:
       api:
         build:
-          context: ../bookstore
+          context: ./bookstore
           dockerfile: Dockerfile
         ports:
           - 8000:8000
         options: >-
-          --health-cmd "curl -f http://localhost:8000/docs || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd="curl --fail http://localhost:8000/health || exit 1"
+          --health-interval=5s
+          --health-timeout=10s
+          --health-retries=5
+
+    defaults:
+      run:
+        working-directory: api-tests
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
           node-version: 20
 
       - name: Install dependencies
-        run: |
-          cd api-tests
-          npm ci
+        run: npm ci
 
       - name: Install Playwright Browsers
-        run: |
-          cd api-tests
-          npx playwright install --with-deps
+        run: npx playwright install --with-deps
 
-      - name: Wait for API to be ready
+      - name: Wait for API to be healthy
         run: |
-          until curl --output /dev/null --silent --head --fail http://localhost:8000/health; do
-            echo "Waiting for API..."
+          echo "Waiting for API to be ready..."
+          for i in {1..20}; do
+            if curl -sSf http://localhost:8000/health; then
+              echo "API is up!"
+              break
+            fi
             sleep 2
           done
 
-      - name: Run Playwright Tests
-        run: |
-          cd api-tests
-          npx playwright test
+      - name: Run Playwright tests
+        run: npx playwright test --reporter=html
 
       - name: Upload HTML Report
         if: always()
