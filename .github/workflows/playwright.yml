@@ -6,14 +6,17 @@ on:
   pull_request:
 
 jobs:
-  api-tests:
-    name: Run API Tests
+  run-api-tests:
+    name: Run Playwright API Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     services:
       api:
-        image: bookstore-api-tests:latest
+        image: bookstore:local
+        build:
+          context: ../bookstore
+          dockerfile: Dockerfile
         ports:
           - 8000:8000
         options: >-
@@ -28,10 +31,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
@@ -41,19 +44,18 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
-      - name: Wait for API to be ready
+      - name: Wait for API to be healthy
         run: |
           echo "Waiting for API to be healthy..."
           for i in {1..20}; do
             if curl -sSf http://localhost:8000/health; then
-              echo "API is healthy!"
+              echo "✅ API is healthy"
               break
             fi
-            echo "Retrying in 3s..."
-            sleep 3
+            sleep 2
           done
 
-      - name: Run Playwright API Tests
+      - name: Run Playwright tests with HTML report
         run: npx playwright test --reporter=html
 
       - name: Upload HTML report
