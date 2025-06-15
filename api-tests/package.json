@@ -1,0 +1,13 @@
+{
+  "name": "bookstore-api-tests",
+  "version": "1.0.0",
+  "scripts": {
+  "reset-db": "powershell -Command \"if (Test-Path '../bookstore/test.db') { Remove-Item '../bookstore/test.db' }\"",
+  "test": "npx playwright test",
+  "clean-test": "npm run reset-db && npm run test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.1",
+    "typescript": "^5.3.3"
+  }
+}

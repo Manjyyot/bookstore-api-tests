@@ -1,0 +1,61 @@
+name: API Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      api:
+        build:
+          context: ../bookstore
+          dockerfile: Dockerfile
+        ports:
+          - 8000:8000
+        options: >-
+          --health-cmd "curl -f http://localhost:8000/docs || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: |
+          cd api-tests
+          npm ci
+
+      - name: Install Playwright Browsers
+        run: |
+          cd api-tests
+          npx playwright install --with-deps
+
+      - name: Wait for API to be ready
+        run: |
+          until curl --output /dev/null --silent --head --fail http://localhost:8000/health; do
+            echo "Waiting for API..."
+            sleep 2
+          done
+
+      - name: Run Playwright Tests
+        run: |
+          cd api-tests
+          npx playwright test
+
+      - name: Upload HTML Report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-report
+          path: api-tests/playwright-report
