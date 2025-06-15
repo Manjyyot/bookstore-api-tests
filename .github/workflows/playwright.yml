@@ -7,53 +7,42 @@ on:
 
 jobs:
   run-api-tests:
-    name: Run Playwright API Tests
+    name: Run API Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
-    services:
-      api:
-        image: bookstore:local
-        build:
-          context: ../bookstore
-          dockerfile: Dockerfile
-        ports:
-          - 8000:8000
-        options: >-
-          --health-cmd="curl --fail http://localhost:8000/health || exit 1"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=10
 
     defaults:
       run:
         working-directory: api-tests
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Set up Docker Compose
+        run: docker-compose -f ../docker-compose.yml up -d
 
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-
-      - name: Wait for API to be healthy
+      - name: Wait for API to be ready
         run: |
-          echo "Waiting for API to be healthy..."
-          for i in {1..20}; do
+          echo "Waiting for API to be ready..."
+          for i in {1..15}; do
             if curl -sSf http://localhost:8000/health; then
               echo "✅ API is healthy"
               break
             fi
             sleep 2
           done
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
 
       - name: Run Playwright tests with HTML report
         run: npx playwright test --reporter=html
