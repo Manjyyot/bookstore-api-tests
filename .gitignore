@@ -1,12 +1,16 @@
-# Node
+# Python
+__pycache__/
+*.py[cod]
+*.env
+*.sqlite3
+venv/
+bookstore/venv/
+
+# Node/Playwright
 node_modules/
 playwright-report/
 test-results/
-.env
+report.json
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-venv/
-bookstore/test.db
+# OS
+.DS_Store
