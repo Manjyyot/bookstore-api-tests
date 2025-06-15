@@ -24,15 +24,15 @@ jobs:
         with:
           node-version: 20
 
-      - name: Set up Docker Compose
-        run: docker-compose -f ../docker-compose.yml up -d
+      - name: Start FastAPI server using Docker
+        run: docker compose -f ../docker-compose.yml up -d
 
       - name: Wait for API to be ready
         run: |
           echo "Waiting for API to be ready..."
           for i in {1..15}; do
             if curl -sSf http://localhost:8000/health; then
-              echo "✅ API is healthy"
+              echo "API is healthy"
               break
             fi
             sleep 2
