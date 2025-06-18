@@ -1,19 +1,31 @@
-// Generate a unique timestamp-based email
-const timestamp = Date.now();
+import { v4 as uuid } from 'uuid';
 
-export const validUser = {
-  email: `qa.user.${timestamp}@example.com`,
-  password: 'SecurePass123'
-};
+/**
+ * Generates a unique valid user with a random email and secure password.
+ */
+export function generateValidUser() {
+  return {
+    email: `user.${uuid()}@example.com`,
+    password: `Pass${Math.floor(Math.random() * 10000)}!`
+  };
+}
 
-// Reuses the same email to simulate duplicate registration
-export const duplicateUser = {
-  email: validUser.email,
-  password: validUser.password
-};
+/**
+ * Reuses the same credentials as an existing user to simulate a duplicate registration attempt.
+ */
+export function generateDuplicateUser(baseUser: { email: string; password: string }) {
+  return {
+    email: baseUser.email,
+    password: baseUser.password
+  };
+}
 
-// Uses same email but wrong password
-export const invalidUser = {
-  email: validUser.email,
-  password: 'WrongPassword'
-};
+/**
+ * Uses the correct email but an invalid password for negative login testing.
+ */
+export function generateInvalidUser(baseUser: { email: string }) {
+  return {
+    email: baseUser.email,
+    password: 'WrongPassword123!'
+  };
+}

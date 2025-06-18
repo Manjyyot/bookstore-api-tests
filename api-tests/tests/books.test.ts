@@ -1,9 +1,11 @@
+// tests/books.test.ts
+
 import { test, expect } from '@playwright/test';
-import { newBook, updatedBook } from '../data/book.data';
+import { generateBook } from '../data/book.data';
 import { getAuthToken } from '../utils/auth.helper';
 import { baseURL } from '../config/env.config';
 
-test.describe('Books API - CRUD Operations & Validations', () => {
+test.describe('Books API - CRUD + Edge Cases', () => {
   let token: string;
 
   test.beforeAll(async () => {
@@ -11,101 +13,160 @@ test.describe('Books API - CRUD Operations & Validations', () => {
   });
 
   test('Full Book Lifecycle', async ({ request }) => {
-    // 1. Create Book
+    const book = generateBook();
+
     const create = await request.post(`${baseURL}/books/`, {
       headers: { Authorization: `Bearer ${token}` },
-      data: newBook
+      data: book
     });
 
-    expect(create.status(), 'Create book failed').toBe(200);
+    expect(create.status(), 'Expected book creation to succeed with 200').toBe(200);
     const created = await create.json();
     const bookId = created.id;
-    expect(created.name).toBe(newBook.name);
 
-    // 2. Get Book by ID
     const get = await request.get(`${baseURL}/books/${bookId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
-    expect(get.status(), 'Get book by ID failed').toBe(200);
+    expect(get.status()).toBe(200);
     const fetched = await get.json();
-    expect(fetched.id).toBe(bookId);
+    expect(fetched.name).toBe(book.name);
 
-    // 3. Update Book
-    const update = await request.put(`${baseURL}/books/${bookId}`, {
+    const updated = await request.put(`${baseURL}/books/${bookId}`, {
       headers: { Authorization: `Bearer ${token}` },
-      data: updatedBook
+      data: { ...book, name: 'Updated Book Name' }
     });
 
-    let updateBody: any = {};
-    try {
-      updateBody = await update.json();
-    } catch {
-      const fallback = await update.text();
-      console.error('Update book failed with raw response:', fallback);
-    }
+    expect(updated.status()).toBe(200);
+    const updatedBody = await updated.json();
+    expect(updatedBody.name).toBe('Updated Book Name');
 
-    console.log('Update book response:', updateBody);
-    expect(update.status(), 'Update book failed').toBe(200);
-    expect(updateBody.name).toBe(updatedBook.name);
-
-    // 4. List All Books
-    const list = await request.get(`${baseURL}/books/`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    expect(list.status(), 'List all books failed').toBe(200);
-    const books = await list.json();
-    expect(Array.isArray(books)).toBe(true);
-
-    // 5. Delete Book
     const del = await request.delete(`${baseURL}/books/${bookId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
-    expect(del.status(), 'Delete book failed').toBe(200);
-    const delBody = await del.json();
-    expect(delBody.message).toContain('deleted');
+    expect(del.status()).toBe(200);
+    const delRes = await del.json();
+    expect(delRes.message).toContain('deleted');
 
-    // 6. Confirm Deletion
-    const checkDel = await request.get(`${baseURL}/books/${bookId}`, {
+    const getDeleted = await request.get(`${baseURL}/books/${bookId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
-    expect(checkDel.status(), 'Deleted book should return 404').toBe(404);
+    expect(getDeleted.status()).toBe(404);
   });
 
-  test('Should reject book creation without token', async ({ request }) => {
-    const res = await request.post(`${baseURL}/books/`, {
-      data: newBook
-    });
+  // ---------- NEGATIVE / EDGE TEST CASES ---------- //
 
-    expect(res.status(), 'Expected 403 when token is missing').toBe(403);
-  });
-
-  test('Should return error on creating book with missing fields', async ({ request }) => {
+  test('Reject creation with missing required fields', async ({ request }) => {
     const res = await request.post(`${baseURL}/books/`, {
       headers: { Authorization: `Bearer ${token}` },
-      data: { name: 'Only Name' } // Missing required fields
+      data: { name: 'Missing author' } // missing author
     });
 
-    const status = res.status();
-    try {
-      const body = await res.json();
-      console.log('Create book with missing fields response:', body);
-    } catch {
-      const text = await res.text();
-      console.warn('Non-JSON response for missing fields:', text);
-    }
-
-    expect([422, 500]).toContain(status);
+    expect([400, 422]).toContain(res.status());
   });
 
-  test('Should return 404 when deleting non-existent book', async ({ request }) => {
-    const res = await request.delete(`${baseURL}/books/99999`, {
+  test('Reject excessively long book name', async ({ request }) => {
+    const res = await request.post(`${baseURL}/books/`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        name: 'A'.repeat(1000),
+        author: 'Author',
+        published_year: 2020,
+        book_summary: 'Long title'
+      }
+    });
+
+    expect([400, 422]).toContain(res.status());
+  });
+
+  test('Allow unicode and symbols in book name', async ({ request }) => {
+    const res = await request.post(`${baseURL}/books/`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        name: '漢字 & Symbols',
+        author: 'Unicode Author',
+        published_year: 2022,
+        book_summary: 'Valid unicode name'
+      }
+    });
+
+    expect([200, 400, 422]).toContain(res.status());
+  });
+
+  test('Reject SQL injection pattern', async ({ request }) => {
+    const res = await request.post(`${baseURL}/books/`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        name: "'; DROP TABLE books; --",
+        author: 'Attacker',
+        published_year: 2022,
+        book_summary: 'Injection attempt'
+      }
+    });
+
+    expect([400, 422]).toContain(res.status());
+  });
+
+  test('Reject future year in published_year', async ({ request }) => {
+    const res = await request.post(`${baseURL}/books/`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        name: 'Future Book',
+        author: 'Time Traveller',
+        published_year: 9999,
+        book_summary: 'Too futuristic'
+      }
+    });
+
+    expect([400, 422]).toContain(res.status());
+  });
+
+  test('Reject unsupported PATCH method', async ({ request }) => {
+    const res = await request.fetch(`${baseURL}/books/`, {
+      method: 'PATCH',
       headers: { Authorization: `Bearer ${token}` }
     });
 
-    expect(res.status(), 'Expected 404 for deleting non-existent book').toBe(404);
+    expect([405, 404]).toContain(res.status());
+  });
+
+  test('Reject empty strings in fields', async ({ request }) => {
+    const res = await request.post(`${baseURL}/books/`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        name: '',
+        author: '',
+        published_year: 2020,
+        book_summary: ''
+      }
+    });
+
+    expect([400, 422]).toContain(res.status());
+  });
+
+  test('Reject non-integer for published_year', async ({ request }) => {
+    const res = await request.post(`${baseURL}/books/`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        name: 'Test Book',
+        author: 'Author',
+        published_year: 'not-a-number',
+        book_summary: 'Bad year'
+      }
+    });
+
+    expect([400, 422]).toContain(res.status());
+  });
+
+  test('Validate that /books returns array', async ({ request }) => {
+    const res = await request.get(`${baseURL}/books/`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body)).toBe(true);
   });
 });

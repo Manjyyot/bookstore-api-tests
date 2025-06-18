@@ -1,27 +1,46 @@
+// utils/auth.helper.ts
+
 import { request } from '@playwright/test';
 import { baseURL } from '../config/env.config';
-import { validUser } from '../data/user.data';
+import { faker } from '@faker-js/faker';
 
+let cachedToken: string | null = null;
+
+/**
+ * Creates a new user and retrieves an access token.
+ * If already created in this session, returns the cached token.
+ */
 export async function getAuthToken(): Promise<string> {
+  if (cachedToken) return cachedToken;
+
+  const email = faker.internet.email().toLowerCase();
+  const password = 'SecurePass123!';
+
   const context = await request.newContext();
 
-  // 1. First, attempt to sign up the user
-  await context.post(`${baseURL}/signup`, {
-    data: validUser
-    // Note: Don't assert status here—if the user is already registered, it's fine
+  // Sign up new user
+  const signupRes = await context.post(`${baseURL}/signup`, {
+    data: { email, password }
   });
 
-  // 2. Then, attempt login with the same user
-  const response = await context.post(`${baseURL}/login`, {
-    data: validUser
-  });
-
-  if (response.status() !== 200) {
-    const errorText = await response.text();
-    console.error('Login failed with response:', errorText);
-    throw new Error('Login failed');
+  if (![200, 201].includes(signupRes.status())) {
+    console.warn(`Signup failed: ${signupRes.status()} - Proceeding to login anyway`);
   }
 
-  const body = await response.json();
-  return body.access_token;
+  // Log in with the new user
+  const loginRes = await context.post(`${baseURL}/login`, {
+    data: { email, password }
+  });
+
+  if (loginRes.status() !== 200) {
+    throw new Error(`Login failed with status: ${loginRes.status()}`);
+  }
+
+  const body = await loginRes.json();
+  if (!body.access_token) {
+    throw new Error('No access_token found in login response');
+  }
+
+  cachedToken = body.access_token;
+  return cachedToken;
 }

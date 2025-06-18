@@ -2,15 +2,19 @@
   "name": "bookstore-api-tests",
   "version": "1.0.0",
   "scripts": {
-  "reset-db": "powershell -Command \"if (Test-Path '../bookstore/test.db') { Remove-Item '../bookstore/test.db' }\"",
-  "test": "npx playwright test",
-  "clean-test": "npm run reset-db && npm run test",
-  "report": "npx playwright show-report",
-  "test:headed": "npx playwright test --headed",
-  "test:debug": "npx playwright test --debug"
+    "reset-db": "powershell -Command \"if (Test-Path '../bookstore/test.db') { Remove-Item '../bookstore/test.db' }\"",
+    "test": "npx playwright test",
+    "clean-test": "npm run reset-db && npm run test",
+    "report": "npx playwright show-report",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug"
   },
   "devDependencies": {
-    "@playwright/test": "^1.44.1",
+    "@playwright/test": "^1.53.0",
     "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.8.0",
+    "uuid": "^11.1.0"
   }
 }

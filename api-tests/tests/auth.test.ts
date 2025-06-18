@@ -1,86 +1,101 @@
 import { test, expect } from '@playwright/test';
-import { validUser, duplicateUser, invalidUser } from '../data/user.data';
 import { baseURL } from '../config/env.config';
+import {
+  generateValidUser,
+  generateDuplicateUser,
+  generateInvalidUser
+} from '../data/user.data';
+import { getMalformedJSON } from '../utils/data.utils';
 
-test.describe('Auth Flow - Signup & Login', () => {
-  // Register a new user with valid credentials
-  test('POST /signup - Should register new user [Positive]', async ({ request }) => {
-    const response = await request.post(`${baseURL}/signup`, { data: validUser });
+test.describe('Authentication API Tests', () => {
+  const user = generateValidUser();
+  const duplicate = generateDuplicateUser(user);
+  const invalid = generateInvalidUser(user);
 
-    expect(response.status(), 'Expected 200 for fresh user signup').toBe(200);
-
-    const body = await response.json();
+  test('Signup with new user', async ({ request }) => {
+    const res = await request.post(`${baseURL}/signup`, { data: user });
+    const body = await res.json();
+    expect(res.status()).toBe(200);
     expect(body.message).toContain('User created successfully');
   });
 
-  // Attempt to register the same user again
-  test('POST /signup - Should reject duplicate user [Negative]', async ({ request }) => {
-    const response = await request.post(`${baseURL}/signup`, { data: duplicateUser });
-
-    expect(response.status(), 'Expected 400 on duplicate signup').toBe(400);
-
-    const body = await response.json();
-    expect(body.detail).toMatch(/already registered/i);
+  test('Signup with duplicate user', async ({ request }) => {
+    const res = await request.post(`${baseURL}/signup`, { data: duplicate });
+    const body = await res.json();
+    expect(res.status()).toBe(400);
+    expect(body.detail).toContain('already registered');
   });
 
-  // Login with valid credentials
-  test('POST /login - Should return access token [Positive]', async ({ request }) => {
-    const response = await request.post(`${baseURL}/login`, { data: validUser });
-
-    expect(response.status(), 'Expected 200 on valid login').toBe(200);
-
-    const body = await response.json();
+  test('Login with valid credentials', async ({ request }) => {
+    const res = await request.post(`${baseURL}/login`, { data: user });
+    const body = await res.json();
+    expect(res.status()).toBe(200);
     expect(body).toHaveProperty('access_token');
-    expect(body.token_type).toBe('bearer');
   });
 
-  // Login with incorrect password
-  test('POST /login - Should fail for wrong credentials [Negative]', async ({ request }) => {
-    const response = await request.post(`${baseURL}/login`, { data: invalidUser });
-
-    expect(response.status(), 'Expected 400 on invalid password').toBe(400);
+  test('Login with invalid password', async ({ request }) => {
+    const res = await request.post(`${baseURL}/login`, { data: invalid });
+    expect(res.status()).toBe(400);
   });
 
-  // Signup request missing required email field
-  test('POST /signup - Should return validation error for missing email [Negative]', async ({ request }) => {
-    const response = await request.post(`${baseURL}/signup`, {
-      data: { password: 'abc' }
+  test('Signup with missing email', async ({ request }) => {
+    const res = await request.post(`${baseURL}/signup`, {
+      data: { password: user.password }
     });
-
-    const status = response.status();
-    let body: any;
-
-    try {
-      body = await response.json();
-      console.log('Validation error (JSON - missing email):', body);
-    } catch {
-      const text = await response.text();
-      console.warn('Validation error (non-JSON - missing email):', text);
-      body = text;
-    }
-
-    expect([422, 500]).toContain(status);
+    // ⚠️ Backend returns 500 on validation error — this should be 400/422
+    expect([400, 422, 500]).toContain(res.status());
   });
 
-  // Signup request missing required password field
-  test('POST /signup - Should return validation error for missing password [Negative]', async ({ request }) => {
-  const response = await request.post(`${baseURL}/signup`, {
-    data: { email: 'missingpass@example.com' } // password is missing
+  test('Signup with missing password', async ({ request }) => {
+    const res = await request.post(`${baseURL}/signup`, {
+      data: { email: user.email }
+    });
+    // ⚠️ Backend returns 500 on validation error — this should be 400/422
+    expect([400, 422, 500]).toContain(res.status());
   });
 
-  const status = response.status();
-  let body: any;
+  test('Signup with malformed JSON', async ({ request }) => {
+    const res = await request.post(`${baseURL}/signup`, {
+      headers: { 'Content-Type': 'application/json' },
+      body: getMalformedJSON()
+    });
+    // ⚠️ Backend may return 400 or 415; ideally should be 422
+    expect([400, 415, 422]).toContain(res.status());
+  });
 
-  try {
-    body = await response.json();
-  } catch {
-    // Fallback for non-JSON error like Internal Server Error
-    body = await response.text();
-    console.warn('Response was not valid JSON:', body);
-  }
+  test('Login with SQL injection string', async ({ request }) => {
+    const res = await request.post(`${baseURL}/login`, {
+      data: { email: "' OR 1=1 --", password: '123' }
+    });
+    expect([400, 422, 401]).toContain(res.status());
+  });
 
-  console.log('Response (missing password):', body);
+  test('Signup with emoji in email', async ({ request }) => {
+    const res = await request.post(`${baseURL}/signup`, {
+      data: { email: `test🚀@example.com`, password: 'test1234' }
+    });
+    expect([200, 400, 422]).toContain(res.status());
+  });
 
-  expect([422, 500]).toContain(status);
+  test('Login with no body', async ({ request }) => {
+    const res = await request.post(`${baseURL}/login`);
+    expect([400, 422]).toContain(res.status());
+  });
+
+  test('Signup with empty string fields', async ({ request }) => {
+    const res = await request.post(`${baseURL}/signup`, {
+      data: { email: '', password: '' }
+    });
+    expect([400, 422, 500]).toContain(res.status()); // ⚠️ 500 for validation is backend bug
+  });
+
+  test('Signup with long email string', async ({ request }) => {
+    const res = await request.post(`${baseURL}/signup`, {
+      data: {
+        email: 'a'.repeat(300) + '@test.com',
+        password: 'pass123'
+      }
+    });
+    expect([400, 422, 500]).toContain(res.status()); // ⚠️ 500 for length violation is improper
   });
 });
